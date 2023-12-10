@@ -1,0 +1,81 @@
+* Teste 
+
+**** Function
+create or replace function "TOTALPEDIDO"
+(vpedido_id in NUMBER)
+return NUMBER
+is
+    
+v_TotalPedido NUMBER;   
+
+begin
+    SELECT sum(p.preco * i.quantidade) into v_TotalPedido
+    from itens_pedido i, produtos p where
+      i.pedido_id = vpedido_id and
+      i.produto_id =  p.produto_id;  
+
+return v_TotalPedido;
+
+end; 
+
+**** Triger 
+
+create or replace trigger "ITENS_PEDIDO_T1"
+AFTER
+insert on "ITENS_PEDIDO"
+for each row
+begin
+UPDATE PEDIDOS
+SET total_pedido = (
+(select pe.total_pedido from pedidos pe where pe.pedido_id = :new.pedido_id) + (:new.quantidade * (select  pr.preco from produtos pr
+     where  pr.produto_id = :new.produto_id))
+)
+ where pedido_id = :new.pedido_id;
+
+end;
+
+**** Procedure 
+
+create or replace procedure "PROC_INSEREPEDIDO"
+(cliente IN NUMBER,
+produto IN NUMBER,
+quantidade IN NUMBER,
+mensagem OUT VARCHAR2 )
+is
+  v_cliente number;
+  v_produto number;
+  v_num_pedido number;
+  v_item number;
+begin
+    
+select 1 into v_cliente from clientes c where c.cliente_id = cliente;
+select p.preco into v_produto from produtos p where p.produto_id = produto;
+
+if v_cliente > 0 then
+    
+  if v_produto > 0  then
+    
+    SELECT MAX(p.pedido_id) into v_num_pedido from pedidos p;
+    v_num_pedido := v_num_pedido + 1;
+
+  
+   insert into pedidos (pedido_id, cliente_id, data_pedido, total_pedido) values
+        (v_num_pedido, cliente, sysdate, (quantidade * v_produto));
+
+   SELECT MAX(ip.item_id) into v_item from itens_pedido ip;
+          v_item := v_item + 1;
+
+   insert into itens_pedido (item_id, pedido_id, produto_id, quantidade) values
+       (v_item,v_num_pedido, produto, quantidade);
+
+   commit;
+       
+  else
+   mensagem :=  'Cliente informado inexistente';
+  end if;
+else
+  mensagem := 'Cliente informado inexistente' ;   
+end if;
+end;
+
+**** FIM
